@@ -1,0 +1,17 @@
+{
+  "name": "audio-splitter",
+  "version": "1.0.0",
+  "description": "Split audio to tinier pieces",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "David Mash",
+  "license": "ISC",
+  "dependencies": {
+    "cloudmersive-video-api-client": "^2.0.5",
+    "music-metadata": "^8.1.0"
+  }
+}
