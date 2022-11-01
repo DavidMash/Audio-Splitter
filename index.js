@@ -68,7 +68,7 @@ const instrumentMatchers = [
     },
 ];
 
-var lsResult = childProcess.execSync('cd WORKSPACE; ls', { encoding: 'utf-8' });  // the default is 'buffer'
+var lsResult = childProcess.execSync('cd WORKSPACE; ls', { encoding: 'utf-8', stdio : 'pipe' });  // the default is 'buffer'
 var allSongs = lsResult.split('\n');
 var currentSong;
 var allFiles;
@@ -80,14 +80,17 @@ for (let i = 0; i < instrumentMatchers.length; i++) {
     matcher.scoresMatched = [];
 }
 
+var songDurations = {};
+
 // processs audio files
 for (let i = 0; i < allSongs.length; i++) {
     var currentSong = allSongs[i];
     if (currentSong == ''){
         break
     }
-    console.log("Working on '" + currentSong + "':");
-    var lsResult = childProcess.execSync('cd WORKSPACE; cd "' + currentSong + '"; cd audio_files; ls', { encoding: 'utf-8' });  // the default is 'buffer'
+    console.log("Working on '" + currentSong + "' audio:");
+    songDurations[currentSong] = {};
+    var lsResult = childProcess.execSync('cd WORKSPACE; cd "' + currentSong + '"; cd audio_files; ls', { encoding: 'utf-8', stdio : 'pipe' });  // the default is 'buffer'
     var allFiles = lsResult.split('\n');
     var baseInputFile = 'WORKSPACE/' + currentSong + '/audio_files';
     for (let j = 0; j < allFiles.length; j++){
@@ -111,21 +114,28 @@ for (let i = 0; i < allSongs.length; i++) {
                 }
             }
             if (instrument == undefined) {
-                console.log('\t"' + currentFile + '" did not match to any instrument regex.')
+                //console.log('\t"' + currentFile + '" did not match to any instrument regex.')
                 continue;
             }
-            console.log("\tWorking on '" + instrument + "'");
+            console.log("\tWorking on '" + instrument + "' audio.");
             const outputFolder = './AUDIO_OUTPUT/' + currentSong;
             try {
-                childProcess.execSync('mkdir "' + outputFolder + '"', { encoding: 'utf-8' });
+                childProcess.execSync('mkdir "' + outputFolder + '"', { encoding: 'utf-8', stdio : 'pipe' });
             } catch (e) {
             }
             try {
                 var inputFile = baseInputFile + '/' + currentFile;
+                //record song durations
+                const metadata = JSON.parse(childProcess.execSync('ffprobe -v quiet -print_format json -show_format -show_streams "' + inputFile + '"', { encoding: 'utf-8', stdio : 'pipe' }));
+                const duration = metadata.streams[0].duration
+                console.log("\t\tThe duration is: " + duration + "s");
+                songDurations[currentSong][instrument] = duration;
+                //break each song into 16 seconds chunks (except the full recordings)
                 if (instrument != "Full") {
-                    childProcess.execSync('ffmpeg -hide_banner -i "' + inputFile + '" -f segment -segment_time ' + 16 + ' -c copy "' + outputFolder + '/' + currentSong + ' - ' + instrument + '":%01d.wav', { encoding: 'utf-8' });
+                    childProcess.execSync('ffmpeg -hide_banner -y -i "' + inputFile + '" -f segment -segment_time ' + 16 + ' -c copy "' + outputFolder + '/' + currentSong + ' - ' + instrument + '":%01d.wav', { encoding: 'utf-8', stdio : 'pipe' });
                 }
-                childProcess.execSync('cp "' + inputFile + '" "' + outputFolder + '/' + currentSong + ' - ' + instrument + '.mp3"', { encoding: 'utf-8' });
+                //copy them over to the right place
+                childProcess.execSync('cp "' + inputFile + '" "' + outputFolder + '/' + currentSong + ' - ' + instrument + '.mp3"', { encoding: 'utf-8', stdio : 'pipe' });
             } catch (error) {
                 console.error(error.message);
             }
@@ -133,14 +143,24 @@ for (let i = 0; i < allSongs.length; i++) {
     }
 }
 
+//save the song durations
+var strData = JSON.stringify(songDurations);
+fs.writeFile('AUDIO_OUTPUT/durations.json', strData, function(err) {
+    if(err) {
+        console.log(err);
+    } else {
+        console.log("Metadata was saved!");
+    }
+});
+
 // process pdf files
 for (let i = 0; i < allSongs.length; i++) {
     var currentSong = allSongs[i];
     if (currentSong == ''){
         break
     }
-    console.log("Working on '" + currentSong + "':");
-    var lsResult = childProcess.execSync('cd WORKSPACE; cd "' + currentSong + '"; cd halved_parts; ls', { encoding: 'utf-8' });  // the default is 'buffer'
+    console.log("Working on '" + currentSong + "' pdfs:");
+    var lsResult = childProcess.execSync('cd WORKSPACE; cd "' + currentSong + '"; cd halved_parts; ls', { encoding: 'utf-8', stdio : 'pipe' });  // the default is 'buffer'
     var allFiles = lsResult.split('\n');
     var baseInputFile = 'WORKSPACE/' + currentSong + '/halved_parts';
     for (let j = 0; j < allFiles.length; j++){
@@ -164,18 +184,18 @@ for (let i = 0; i < allSongs.length; i++) {
                 }
             }
             if (instrument == undefined) {
-                console.log('\t"' + currentFile + '" did not match to any instrument regex.')
+                //console.log('\t"' + currentFile + '" did not match to any instrument regex.')
                 continue;
             }
-            console.log("\tWorking on '" + instrument + "'");
+            console.log("\tWorking on '" + instrument + "' pdf.");
             const outputFolder = './SCORE_OUTPUT/' + currentSong;
             try {
-                childProcess.execSync('mkdir "' + outputFolder + '"', { encoding: 'utf-8' });
+                childProcess.execSync('mkdir "' + outputFolder + '"', { encoding: 'utf-8', stdio : 'pipe' });
             } catch (e) {
             }
             try {
                 var inputFile = baseInputFile + '/' + currentFile;
-                childProcess.execSync('cp "' + inputFile + '" "' + outputFolder + '/' + currentSong + ' - ' + instrument + '.pdf"', { encoding: 'utf-8' });
+                childProcess.execSync('cp "' + inputFile + '" "' + outputFolder + '/' + currentSong + ' - ' + instrument + '.pdf"', { encoding: 'utf-8', stdio : 'pipe' });
             } catch (error) {
                 console.error(error.message);
             }
@@ -183,7 +203,7 @@ for (let i = 0; i < allSongs.length; i++) {
     }
 }
 
-lsResult = childProcess.execSync('cd AUDIO_OUTPUT; ls', { encoding: 'utf-8' });  // the default is 'buffer'
+lsResult = childProcess.execSync('cd AUDIO_OUTPUT; ls', { encoding: 'utf-8', stdio : 'pipe' });  // the default is 'buffer'
 var allSongs = lsResult.split('\n');
 var currentSong;
 var allFiles;
@@ -192,18 +212,19 @@ for (let i = 0; i < allSongs.length; i++) {
     if (currentSong == ''){
         break
     }
-    var lsResult = childProcess.execSync('cd AUDIO_OUTPUT; cd "' + currentSong + '"; ls', { encoding: 'utf-8' });  // the default is 'buffer'
+    console.log("Working on creating cleaned files for '" + currentSong + "':");
+    var lsResult = childProcess.execSync('cd AUDIO_OUTPUT; cd "' + currentSong + '"; ls', { encoding: 'utf-8', stdio : 'pipe' });  // the default is 'buffer'
     var allFiles = lsResult.split('\n');
-
     for (let j=0; j<allFiles.length; j++ ){
         var currentFile = allFiles[j];
         var split = currentFile.split(".");
         var ext = split[1];
         if (ext == "mp3" & split[0].split('_')[0] != "clean" ) {
+            console.log("\tWorking on '" + instrument + "' cleaned file.");
             try {
                 var baseInputFile = 'AUDIO_OUTPUT/' + currentSong;
                 var inputFile = baseInputFile + '/' + currentFile;
-                childProcess.execSync('ffmpeg -hide_banner -i "' + inputFile + '" -codec:a libmp3lame -b:a 128k "' + baseInputFile + '/clean_' + currentFile + '" ', { encoding: 'utf-8' });
+                childProcess.execSync('ffmpeg -hide_banner -y -i "' + inputFile + '" -codec:a libmp3lame -b:a 128k "' + baseInputFile + '/clean_' + currentFile + '" ', { encoding: 'utf-8', stdio : 'pipe' });
             } catch (error) {
                 console.error(error.message);
             }
@@ -211,30 +232,29 @@ for (let i = 0; i < allSongs.length; i++) {
     }
 }
 
+//create waveform files
+console.log("Creating waveform json files.");
 for (let i = 0; i < allSongs.length; i++) {
     currentSong = allSongs[i];
     if (currentSong == ''){
         break
     }
-    var lsResult = childProcess.execSync('cd AUDIO_OUTPUT; cd "' + currentSong + '"; ls', { encoding: 'utf-8' });
+    console.log("Working on creating waveform json files for '" + currentSong + "':");
+    var lsResult = childProcess.execSync('cd AUDIO_OUTPUT; cd "' + currentSong + '"; ls', { encoding: 'utf-8', stdio : 'pipe' });
     allFiles = lsResult.split('\n');
-
     for (let j=0; j<allFiles.length; j++ ){
         var currentFile = allFiles[j];
         var split = currentFile.split(".");
         var ext = split[1];
         if (ext == "mp3" & split[0].split('_')[0]== "clean" ) {
+            console.log("\tWorking on '" + instrument + "' waveform.");
             try {
-
                 var baseInputFile = 'AUDIO_OUTPUT/' + currentSong;
                 var inputFile = baseInputFile + '/' + currentFile;
                 var baseOutputFolder = 'WAVEFORM_OUTPUT/' + currentSong;
                 var outputFile = baseOutputFolder + '/' + split[0].split('_')[1];
-
-                childProcess.execSync('mkdir -p "' + baseOutputFolder + '"', { encoding: 'utf-8' });
-                childProcess.execSync('audiowaveform -i "' + inputFile + '" -o "' + outputFile + '.json" --amplitude-scale 0 -b 8 -z 12800 -q ', { encoding: 'utf-8' });
-                // childProcess.execSync('audiowaveform -i "' + inputFile + '" -o "' + outputFile + '.png" -b 8 -z auto -q ', { encoding: 'utf-8' });
-
+                childProcess.execSync('mkdir -p "' + baseOutputFolder + '"', { encoding: 'utf-8', stdio : 'pipe' });
+                childProcess.execSync('audiowaveform -i "' + inputFile + '" -o "' + outputFile + '.json" --amplitude-scale 0 -b 8 -z 12800 -q ', { encoding: 'utf-8', stdio : 'pipe' });
             } catch (error) {
                 console.error(error.message);
             }
@@ -243,20 +263,23 @@ for (let i = 0; i < allSongs.length; i++) {
 }
 
 // normalize!
+console.log("Normalizing waveforms.");
 for (let i = 0; i < allSongs.length; i++) {
     currentSong = allSongs[i];
     if (currentSong == ''){
         break
     }
-    lsResult = childProcess.execSync('cd WAVEFORM_OUTPUT; cd "' + currentSong + '"; ls', { encoding: 'utf-8' }); 
+    console.log("Working on normalizing the waveform json files for '" + currentSong + "':");
+    lsResult = childProcess.execSync('cd WAVEFORM_OUTPUT; cd "' + currentSong + '"; ls', { encoding: 'utf-8', stdio : 'pipe' }); 
     allFiles = lsResult.split('\n');
     for (let j=0; j<allFiles.length; j++ ){
         var currentFile = allFiles[j];
         var split = currentFile.split(".");
         var ext = split[1];
         if (ext == "json") {
+            console.log("\tWorking on '" + instrument + "' waveform normalization.");
             (function (filename) {
-                console.log(filename);
+                //console.log(filename);
                 fs.readFile(filename, (err, data) => {
                     if (err) throw err;
                     const json = JSON.parse(data);
@@ -282,8 +305,6 @@ for (let i = 0; i < allSongs.length; i++) {
                     fs.writeFile(filename, str, function(err) {
                         if(err) {
                             console.log(err);
-                        } else {
-                            console.log(filename + " was saved!");
                         }
                     });
                 });
@@ -293,28 +314,27 @@ for (let i = 0; i < allSongs.length; i++) {
 }
 
 // clean up!
+console.log("Cleaning up...");
 for (let i = 0; i < allSongs.length; i++) {
     currentSong = allSongs[i];
     if (currentSong == ''){
         break
     }
-    var lsResult = childProcess.execSync('cd AUDIO_OUTPUT; cd "' + currentSong + '"; ls', { encoding: 'utf-8' });
+    var lsResult = childProcess.execSync('cd AUDIO_OUTPUT; cd "' + currentSong + '"; ls', { encoding: 'utf-8', stdio : 'pipe' });
     allFiles = lsResult.split('\n');
-
     for (let j=0; j<allFiles.length; j++ ){
         var currentFile = allFiles[j];
         var split = currentFile.split(".");
         var ext = split[1];
         if (ext == "mp3" & split[0].split('_')[0]== "clean" ) {
             try {
-
                 var baseInputFile = 'AUDIO_OUTPUT/' + currentSong;
                 var file = baseInputFile + '/' + currentFile;
-
-                childProcess.execSync('rm "' + file + '"', { encoding: 'utf-8' });
+                childProcess.execSync('rm "' + file + '"', { encoding: 'utf-8', stdio : 'pipe' });
             } catch (error) {
                 console.error(error.message);
             }
         }
     }
 }
+console.log("Done!");
